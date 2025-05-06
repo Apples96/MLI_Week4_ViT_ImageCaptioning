@@ -13,7 +13,9 @@ class MaskedSelfAttention(nn.Module):
         self.Wq = nn.Linear(self.embed_dim, self.embed_dim)
         self.Wk = nn.Linear(self.embed_dim, self.embed_dim)
         self.Wv = nn.Linear(self.embed_dim, self.embed_dim)
-        self.mask = torch.tril(torch.ones(seq_length, seq_length)) # Lower triangular matrix of ones (including the diagonal)
+        # Register the mask as a buffer to automatically move it to the right device
+        self.register_buffer("mask", torch.tril(torch.ones(seq_length, seq_length))) # Lower triangular matrix of ones (including the diagonal)
+
     def forward (self, x):
         batch_size, seq_len, _ = x.shape
          
