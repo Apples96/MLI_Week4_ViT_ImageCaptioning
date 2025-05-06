@@ -67,7 +67,7 @@ def train_image_caption(
     
     # Load raw dataset (or subset))
     #dataset = Flickr30k(split='train')
-    dataset = sample_dataset(Flickr30k(), max_samples=10000)
+    dataset = sample_dataset(Flickr30k(), max_samples=100)
     
     # Build train and test datasets (80% train, 20% test)
     dataset_size = len(dataset)
@@ -172,8 +172,8 @@ def train_image_caption(
                 )
                 
                 # Calculate loss
-                reshaped_logits = output_logits.view(-1, model.vocab_size)
-                reshaped_targets = tokenized_output_captions.view(-1)
+                reshaped_logits = caption_output_logits.reshape(batch_size*model.sequence_length, model.vocab_size)  # [batch_size * seq_len, vocab_size]
+                reshaped_targets = tokenized_output_captions.reshape(batch_size*model.sequence_length) # [batch_size * seq_len]
                 loss = criterion(reshaped_logits, reshaped_targets)
                 
                 eval_loss += loss.item()
