@@ -123,6 +123,10 @@ def train_image_caption(
 
             # Preproecss batch
             tokenized_images, tokenized_input_captions, tokenized_output_captions = process_batch(batch)
+            if batch_idx == 0:
+                print(f"tokenized_images.shape:{tokenized_images.shape}")
+                print(f"tokenized_input_captions.shape:{tokenized_input_captions.shape}")
+                print(f"tokenized_output_captions.shape:{tokenized_output_captions.shape}")
 
             # Run forward pass
             caption_output_logits = model(tokenized_images, tokenized_input_captions) # (batch_size, 76, 49408)
@@ -130,8 +134,8 @@ def train_image_caption(
             # Reshape logits and targets for loss calculation
             # output_logits: [batch_size, seq_len, vocab_size] → [batch_size * seq_len, vocab_size]
             # target_captions: [batch_size, seq_len] → [batch_size * seq_len]
-            reshaped_logits = caption_output_logits.reshape(batch_size*model.sequence_length, model.vocab_size)  # [batch_size * seq_len, vocab_size]
-            reshaped_targets = tokenized_output_captions.reshape(batch_size*model.sequence_length) # [batch_size * seq_len]
+            reshaped_logits = caption_output_logits.reshape(-1, model.vocab_size)  # [batch_size * seq_len, vocab_size]
+            reshaped_targets = tokenized_output_captions.reshape(-1) # [batch_size * seq_len]
 
             # Calculate loss
             loss = criterion(reshaped_logits, reshaped_targets)
@@ -166,14 +170,11 @@ def train_image_caption(
                 tokenized_images, tokenized_input_captions, tokenized_output_captions = process_batch(batch)
                 
                 # Get model outputs
-                output_logits = model(
-                    images=tokenized_images,
-                    input_captions=tokenized_input_captions
-                )
+                caption_output_logits = model(tokenized_images, tokenized_input_captions)
                 
                 # Calculate loss
-                reshaped_logits = caption_output_logits.reshape(batch_size*model.sequence_length, model.vocab_size)  # [batch_size * seq_len, vocab_size]
-                reshaped_targets = tokenized_output_captions.reshape(batch_size*model.sequence_length) # [batch_size * seq_len]
+                reshaped_logits = caption_output_logits.reshape(-1, model.vocab_size)  # [batch_size * seq_len, vocab_size]
+                reshaped_targets = tokenized_output_captions.reshape(-1) # [batch_size * seq_len]
                 loss = criterion(reshaped_logits, reshaped_targets)
                 
                 eval_loss += loss.item()
