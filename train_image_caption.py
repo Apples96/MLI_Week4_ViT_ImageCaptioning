@@ -57,8 +57,8 @@ def process_batch(batch, max_text_length=77):
 
 def train_image_caption(
     clip_model_name="openai/clip-vit-base-patch32",
-    batch_size=16,
-    num_epochs=1,
+    batch_size=32,
+    num_epochs=5,
     learning_rate=1e-4
 ):
     # Set device
@@ -66,8 +66,8 @@ def train_image_caption(
     print(f"Using device: {device}")
     
     # Load raw dataset (or subset))
-    #dataset = Flickr30k(split='train')
-    dataset = sample_dataset(Flickr30k(), max_samples=100)
+    dataset = Flickr30k()
+    #dataset = sample_dataset(Flickr30k(), max_samples=100)
     
     # Build train and test datasets (80% train, 20% test)
     dataset_size = len(dataset)
@@ -123,10 +123,10 @@ def train_image_caption(
 
             # Preproecss batch
             tokenized_images, tokenized_input_captions, tokenized_output_captions = process_batch(batch)
-            if batch_idx == 0:
-                print(f"tokenized_images.shape:{tokenized_images.shape}")
-                print(f"tokenized_input_captions.shape:{tokenized_input_captions.shape}")
-                print(f"tokenized_output_captions.shape:{tokenized_output_captions.shape}")
+            # if batch_idx == 0:
+            #     print(f"tokenized_images.shape:{tokenized_images.shape}")
+            #     print(f"tokenized_input_captions.shape:{tokenized_input_captions.shape}")
+            #     print(f"tokenized_output_captions.shape:{tokenized_output_captions.shape}")
 
             # Run forward pass
             caption_output_logits = model(tokenized_images, tokenized_input_captions) # (batch_size, 76, 49408)

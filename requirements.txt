@@ -2,7 +2,9 @@ torch
 wandb
 transformers
 tqdm
-pickle
 torchvision
 datasets
 matplotlib
+streamlit
+pillow
+huggingface_hub
