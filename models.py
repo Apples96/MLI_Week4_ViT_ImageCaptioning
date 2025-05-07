@@ -66,7 +66,7 @@ class MaskedSelfAttention(nn.Module):
 
 
 class ViTImageCaptioningModel(nn.Module):
-    def __init__(self, clip_model_name="openai/clip-vit-base-patch32", text_seq_length=76, image_seq_length = 50, vocab_size=49408, num_decoder_layers=6, img_embed_dim = 768, text_embed_dim = 512, num_heads=8):
+    def __init__(self, clip_model_name="openai/clip-vit-base-patch32", text_seq_length=76, image_seq_length = 50, vocab_size=49408, num_decoder_layers=2, img_embed_dim = 768, text_embed_dim = 512, num_heads=4):
         super().__init__()
         self.text_seq_length = text_seq_length # after preprocessing includes 76 tokens incl either BOS or EOS (we take off one of them)
         self.vocab_size = vocab_size
@@ -101,7 +101,8 @@ class ViTImageCaptioningModel(nn.Module):
         # Attention_mask shape : (num_patches (50), img_embed_dim (768)) > gets projected over batch dimension
 
         # Generate image embeddings (incl positional embeddings)and bring them down to embed_size of 512 to match text embeddings (with a FF layer)
-        images_embeddings = self.clip_model.vision_model.embeddings(tokenized_images)
+        vision_outputs = self.clip_model.vision_model(tokenized_images)
+        images_embeddings = vision_outputs.last_hidden_state
         # print(f"Images embeddings shape before resizing:{images_embeddings.shape}. Should be (batch_size, num_patches (50), img_embed_dim (768)")
 
         resized_images_embeddings = self.ff0(images_embeddings)

@@ -57,8 +57,8 @@ def process_batch(batch, max_text_length=77):
 
 def train_image_caption(
     clip_model_name="openai/clip-vit-base-patch32",
-    batch_size=32,
-    num_epochs=5,
+    batch_size=10,
+    num_epochs=1,
     learning_rate=1e-4
 ):
     # Set device
