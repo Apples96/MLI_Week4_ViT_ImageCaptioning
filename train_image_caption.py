@@ -47,13 +47,20 @@ def process_batch(batch, max_text_length=77):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenized_inputs = {k: v.to(device) for k, v in tokenized_inputs.items()}
     
+    # Get tokenized images from CLIP processor
+    tokenized_images = tokenized_inputs["pixel_values"] 
+    
     # Split input_ids for teacher forcing (input is all but last, target is all but first)
-    tokenized_images = tokenized_inputs["pixel_values"]
-    input_ids = tokenized_inputs["input_ids"]
+    input_ids = tokenized_inputs["input_ids"] # Padding token and EOS token is 49407 ; BOS token is 49406
     tokenized_input_captions = input_ids[:, :-1]  # Remove last token (for input)
     tokenized_output_captions = input_ids[:, 1:]  # Remove first token (for target)
+
+    # Get padding mask from CLIP processor
+    padding_mask = tokenized_inputs['attention_mask']  # [batch_size, seq_len]
+    input_padding_mask = padding_mask[:, :-1]  # Remove last token (for input)
+    output_padding_mask = padding_mask[:, 1:] # Remove first token (for target)
     
-    return tokenized_images, tokenized_input_captions, tokenized_output_captions
+    return tokenized_images, tokenized_input_captions, input_padding_mask, tokenized_output_captions, output_padding_mask
 
 def train_image_caption(
     clip_model_name="openai/clip-vit-base-patch32",
@@ -66,8 +73,8 @@ def train_image_caption(
     print(f"Using device: {device}")
     
     # Load raw dataset (or subset))
-    dataset = Flickr30k()
-    #dataset = sample_dataset(Flickr30k(), max_samples=100)
+    #dataset = Flickr30k()
+    dataset = sample_dataset(Flickr30k(), max_samples=10)
     
     # Build train and test datasets (80% train, 20% test)
     dataset_size = len(dataset)
@@ -97,7 +104,7 @@ def train_image_caption(
 
     # Set optimizer and loss criteria
     optimizer = Adam(model.parameters(), lr=learning_rate)
-    criterion = torch.nn.CrossEntropyLoss(ignore_index=0)  # Typically 0 is padding, adjust if needed
+    criterion = torch.nn.CrossEntropyLoss(reduction='none')  # can't just do ignore_token_id = 49407 because padding token is same as EOS token and is 49407. We need at least 1 EOS token. Need reduction = none so that it outputs loss for every token, not just the mean loss (which it does by default) - we need this to then mask out the loss from padding tokens. 
     criterion = criterion.to(device)  # Move criterion to device
 
     # Set up Weights and Biases tracking
@@ -122,14 +129,22 @@ def train_image_caption(
             optimizer.zero_grad()
 
             # Preproecss batch
-            tokenized_images, tokenized_input_captions, tokenized_output_captions = process_batch(batch)
-            # if batch_idx == 0:
-            #     print(f"tokenized_images.shape:{tokenized_images.shape}")
-            #     print(f"tokenized_input_captions.shape:{tokenized_input_captions.shape}")
-            #     print(f"tokenized_output_captions.shape:{tokenized_output_captions.shape}")
+            tokenized_images, tokenized_input_captions, input_padding_mask, tokenized_output_captions, output_padding_mask = process_batch(batch)
+            if batch_idx == 0:
+                print(f"tokenized_images.shape:{tokenized_images.shape}")
+                print(f"tokenized_images:{tokenized_images}")
+                print(f"tokenized_input_captions.shape:{tokenized_input_captions.shape}")
+                print(f"tokenized_input_captions:{tokenized_input_captions}")
+                print(f"tokenized_output_captions.shape:{tokenized_output_captions.shape}")
+                print(f"tokenized_input_captions:{tokenized_input_captions}")
+                print(f"input_padding_mask.shape:{input_padding_mask.shape}")
+                print(f"input_padding_mask:{input_padding_mask}")
+                print(f"output_padding_mask.shape:{output_padding_mask.shape}")
+                print(f"output_padding_mask:{output_padding_mask}")
+
 
             # Run forward pass
-            caption_output_logits = model(tokenized_images, tokenized_input_captions) # (batch_size, 76, 49408)
+            caption_output_logits = model(tokenized_images, tokenized_input_captions, input_padding_mask) # (batch_size, 76, 49408)
 
             # Reshape logits and targets for loss calculation
             # output_logits: [batch_size, seq_len, vocab_size] → [batch_size * seq_len, vocab_size]
@@ -139,6 +154,19 @@ def train_image_caption(
 
             # Calculate loss
             loss = criterion(reshaped_logits, reshaped_targets)
+
+            # Apply padding mask to loss so that all loss computed on a padding token is just set to 0. 
+            if output_padding_mask is not None:
+                # Reshape mask to match loss dimensions
+                mask = output_padding_mask.reshape(-1).float()
+                
+                # Apply mask to loss
+                loss = loss * mask
+                
+                # Average only over non-padding positions
+                loss = loss.sum() / (mask.sum() + 1e-8)
+            else:
+                loss = loss.mean()
 
             # Backprop and update gradients
             loss.backward()
@@ -167,15 +195,28 @@ def train_image_caption(
             for batch in tqdm(val_loader, desc="Evaluating"):  # Using same data for simplicity, should use validation set
                 # Process batch
                 # Preproecss batch
-                tokenized_images, tokenized_input_captions, tokenized_output_captions = process_batch(batch)
+                tokenized_images, tokenized_input_captions, input_padding_mask, tokenized_output_captions, output_padding_mask = process_batch(batch)
                 
                 # Get model outputs
-                caption_output_logits = model(tokenized_images, tokenized_input_captions)
+                caption_output_logits = model(tokenized_images, tokenized_input_captions, input_padding_mask)
                 
                 # Calculate loss
                 reshaped_logits = caption_output_logits.reshape(-1, model.vocab_size)  # [batch_size * seq_len, vocab_size]
                 reshaped_targets = tokenized_output_captions.reshape(-1) # [batch_size * seq_len]
                 loss = criterion(reshaped_logits, reshaped_targets)
+
+                # Apply padding mask to loss so that all loss computed on a padding token is just set to 0. 
+                if output_padding_mask is not None:
+                    # Reshape mask to match loss dimensions
+                    mask = output_padding_mask.reshape(-1).float()
+                    
+                    # Apply mask to loss
+                    loss = loss * mask
+                    
+                    # Average only over non-padding positions
+                    loss = loss.sum() / (mask.sum() + 1e-8)
+                else:
+                    loss = loss.mean()
                 
                 eval_loss += loss.item()
                 eval_batch_count += 1

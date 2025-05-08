@@ -12,6 +12,7 @@ class MaskedSelfAttention(nn.Module):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
+        self.image_seq_length = image_seq_length
         assert self.head_dim * num_heads == embed_dim, "embed_dim must be divisible by num_heads"
 
         self.Wq = nn.Linear(self.embed_dim, self.embed_dim)
@@ -29,7 +30,7 @@ class MaskedSelfAttention(nn.Module):
 
         self.register_buffer("mask", causal_mask)
     
-    def forward (self, x):
+    def forward (self, x, input_padding_mask=None):
         batch_size, seq_len, _ = x.shape
          
         # Apply projections while keeping batch dimension
@@ -54,6 +55,28 @@ class MaskedSelfAttention(nn.Module):
         mask = self.mask.unsqueeze(0).unsqueeze(0)  # (1, 1, seq_len, seq_len)
         masked_sims = sims.masked_fill(mask == 0, -1e9)
         # print(f"masked_sims.shape {masked_sims.shape}")
+
+        # Additionally apply padding mask if provided
+        if input_padding_mask is not None:
+            # Create attention-compatible padding mask 
+            # [batch_size, seq_len] -> [batch_size, 1, 1, seq_len]
+            image_padding = torch.ones(
+                (batch_size, self.image_seq_length), 
+                device=input_padding_mask.device
+            )
+            
+            # Concatenate to create full padding mask
+            full_padding_mask = torch.cat([image_padding, input_padding_mask], dim=1)
+
+            full_padding_mask = full_padding_mask.unsqueeze(1).unsqueeze(2)
+            
+            # Extend across attention dimension
+            # [batch_size, 1, 1, seq_len] -> [batch_size, 1, seq_len, seq_len]
+            extended_padding_mask = full_padding_mask.repeat(1, 1, seq_len, 1)
+            
+            # Combine with causal mask
+            masked_sims = masked_sims.masked_fill(extended_padding_mask == 0, -1e9)
+
         scaled_masked_sims = F.softmax(masked_sims, dim = -1) # (batch_size, num_heads, seq_len, seq_len)
         x = scaled_masked_sims @ value_emb # (batch_size, seq_len, seq_len) @ (batch_size, seq_len, embed_dim) > (batch_size, seq_len, embed_dim)
         # Reshape back: (batch_size, num_heads, seq_len, head_dim) -> (batch_size, seq_len, embed_dim)
@@ -71,7 +94,7 @@ class ViTImageCaptioningModel(nn.Module):
         self.text_seq_length = text_seq_length # after preprocessing includes 76 tokens incl either BOS or EOS (we take off one of them)
         self.vocab_size = vocab_size
         self.num_decoder_layers = num_decoder_layers
-        self.image_seq_length = image_seq_length # includes 49 patches and 1 CLS token
+        self.image_seq_length = image_seq_length # 50 - includes 49 patches and 1 CLS token
         self.num_tokens = self.text_seq_length + self.image_seq_length # 126
         self.num_heads = num_heads #8
         
@@ -91,7 +114,7 @@ class ViTImageCaptioningModel(nn.Module):
         self.ff1 = nn.Linear(self.text_embed_dim, self.text_embed_dim) 
         self.ff2 = nn.Linear(self.text_embed_dim, self.vocab_size) 
         
-    def forward(self, tokenized_images, tokenized_input_captions):
+    def forward(self, tokenized_images, tokenized_input_captions, input_padding_mask=None):
         
         
         # Tokenize and preprocess raw images to be passes to CLIP embedding layers. Resizes images to (224, 224), converts to RGB, adds BOS and EOS tokens at start and finish of captions. 
@@ -125,7 +148,7 @@ class ViTImageCaptioningModel(nn.Module):
             # if i == 0:
             #     print(f"residuals1.shape {residuals1.shape}")
             
-            x = self.masked_attention(x) # (batch_size, 126, 512)
+            x = self.masked_attention(x, input_padding_mask) # (batch_size, 126, 512)
             # if i == 0:
             #     print (f"x after masked attention {x.shape}")
             
