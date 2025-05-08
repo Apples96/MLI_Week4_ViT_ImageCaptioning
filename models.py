@@ -89,7 +89,7 @@ class MaskedSelfAttention(nn.Module):
 
 
 class ViTImageCaptioningModel(nn.Module):
-    def __init__(self, clip_model_name="openai/clip-vit-base-patch32", text_seq_length=76, image_seq_length = 50, vocab_size=49408, num_decoder_layers=2, img_embed_dim = 768, text_embed_dim = 512, num_heads=4):
+    def __init__(self, clip_model_name="openai/clip-vit-base-patch32", text_seq_length=76, image_seq_length = 50, vocab_size=49408, num_decoder_layers=6, img_embed_dim = 768, text_embed_dim = 512, num_heads=8):
         super().__init__()
         self.text_seq_length = text_seq_length # after preprocessing includes 76 tokens incl either BOS or EOS (we take off one of them)
         self.vocab_size = vocab_size

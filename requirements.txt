@@ -8,3 +8,4 @@ matplotlib
 streamlit
 pillow
 huggingface_hub
+streamlit

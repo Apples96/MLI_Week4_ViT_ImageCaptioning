@@ -64,8 +64,8 @@ def process_batch(batch, max_text_length=77):
 
 def train_image_caption(
     clip_model_name="openai/clip-vit-base-patch32",
-    batch_size=10,
-    num_epochs=1,
+    batch_size=32,
+    num_epochs=5,
     learning_rate=1e-4
 ):
     # Set device
@@ -73,8 +73,8 @@ def train_image_caption(
     print(f"Using device: {device}")
     
     # Load raw dataset (or subset))
-    #dataset = Flickr30k()
-    dataset = sample_dataset(Flickr30k(), max_samples=10)
+    dataset = Flickr30k()
+    #dataset = sample_dataset(Flickr30k(), max_samples=10)
     
     # Build train and test datasets (80% train, 20% test)
     dataset_size = len(dataset)
