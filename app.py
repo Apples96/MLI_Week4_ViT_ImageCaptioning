@@ -27,7 +27,7 @@ def load_model():
     st.info(f"Model configuration: text_seq_length={model.text_seq_length}, image_seq_length={model.image_seq_length}")
     
     # Load model weights
-    model_path = "models/best_image_caption_model.pt"
+    model_path = "models/image_caption_model_20250508Epoch3.pt"
     
     if os.path.exists(model_path):
         try:
@@ -134,7 +134,7 @@ def main():
         image = Image.open(input_file).convert("RGB")
         
         # Display the image
-        st.image(image, caption="Your Image", use_column_width=True)
+        st.image(image, caption="Your Image", use_container_width=True)
         
         # Process image when user clicks the button
         if st.button("Generate Caption"):
